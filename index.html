@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mi App Electron</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ventana Principal</h1>
+    <button onclick="createWindow()">Crear Nueva Ventana</button>
+    <button onclick="createModal()">Crear Ventana Modal</button>
+
+    <script>
+        function createWindow() {
+            window.electronAPI.createWindow();
+        }
+
+        function createModal() {
+            window.electronAPI.createModal();
+        }
+    </script>
+</body>
+</html>
