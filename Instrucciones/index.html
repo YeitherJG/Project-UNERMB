@@ -1,0 +1,329 @@
+// 1. IMPORTACIONES main.js
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+
+// app: Controla el ciclo de vida de la aplicación
+// BrowserWindow: Crea y maneja ventanas
+// ipcMain: Comunicación entre procesos (principal <-> renderizador)
+// path: Maneja rutas de archivos
+
+// 2. VARIABLE GLOBAL
+let mainWindow; // Guarda referencia a la ventana principal
+
+// 3. FUNCIÓN: Crear ventana principal
+function createMainWindow() {
+  mainWindow = new BrowserWindow({
+    width: 800,
+    height: 600,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'), // Archivo puente
+      nodeIntegration: false, // SEGURIDAD: No usar Node en el frontend
+      contextIsolation: true  // SEGURIDAD: Aísla contextos
+    }
+  });
+
+  mainWindow.loadFile('index.html'); // Carga el HTML
+  // mainWindow.webContents.openDevTools(); // Abre DevTools (opcional)
+}
+
+// 4. FUNCIÓN: Crear ventana nueva
+function createNewWindow() {
+  const newWindow = new BrowserWindow({
+    width: 600,
+    height: 400,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  newWindow.loadFile('secondary.html');
+}
+
+// 5. FUNCIÓN: Crear ventana modal
+function createModalWindow() {
+  const modalWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    parent: mainWindow, // La ventana principal es su "papá"
+    modal: true, // No puedes interactuar con la ventana padre hasta cerrar esta
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  modalWindow.loadFile('modal.html');
+}
+
+// 6. EVENTO: Cuando la app está lista
+app.whenReady().then(() => {
+  createMainWindow();
+
+  // ESCUCHADOR: Espera señales desde el frontend
+  ipcMain.on('create-window', () => {
+    createNewWindow();
+  });
+
+  ipcMain.on('create-modal', () => {
+    createModalWindow();
+  });
+});
+
+// 7. EVENTO: Cerrar todas las ventanas
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') { // Si NO es macOS
+    app.quit(); // Cierra la aplicación
+  }
+});
+
+// 8. EVENTO: Activar (solo macOS)
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createMainWindow(); // Recrea ventana si no hay ninguna
+  }
+});
+
+
+// 1. IMPORTACIONES preload.js
+const { contextBridge, ipcRenderer } = require('electron');
+
+// contextBridge: Expone funciones de forma SEGURA al frontend
+// ipcRenderer: Envía mensajes al proceso principal (ipcMain)
+
+// 2. EXPONER FUNCIONES AL FRONTEND DE FORMA SEGURA
+contextBridge.exposeInMainWorld('electronAPI', {
+    // La ventana principal usará: window.electronAPI.createWindow()
+    createWindow: () => ipcRenderer.send('create-window'),
+    
+    // La ventana principal usará: window.electronAPI.createModal()
+    createModal: () => ipcRenderer.send('create-modal')
+});
+
+// ¿Por qué necesitamos esto?
+// Sin preload.js: El frontend NO puede usar require() ni ipcRenderer
+// Con preload.js: El frontend PUEDE usar SOLO las funciones que exponemos
+// Es como darle al frontend un control remoto con botones específicos
+
+
+  index.html
+  <!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mi App Electron</title>
+    <style>
+        /* CSS: Estilos de la ventana */
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        button {
+            padding: 12px 24px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: white;
+            color: #667eea;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <h1>🏠 Ventana Principal</h1>
+    <p>Esta es la ventana principal de la aplicación</p>
+    
+    <!-- Botones que el usuario puede presionar -->
+    <button onclick="createWindow()">➕ Crear Nueva Ventana</button>
+    <button onclick="createModal()">💬 Crear Ventana Modal</button>
+
+    <script>
+        // JAVASCRIPT: Código del frontend
+        // Estas funciones usan las funciones expuestas en preload.js
+        
+        function createWindow() {
+            // Envía señal al proceso principal para crear ventana
+            window.electronAPI.createWindow();
+            console.log('Solicitando crear ventana...');
+        }
+
+        function createModal() {
+            // Envía señal al proceso principal para crear modal
+            window.electronAPI.createModal();
+            console.log('Solicitando crear modal...');
+        }
+    </script>
+</body>
+</html>
+
+secondary.html
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ventana Secundaria</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 40px;
+            background: #f5f5f5;
+            color: #333;
+        }
+        .window-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="window-card">
+        <h2>📄 Ventana Secundaria</h2>
+        <p>Esta ventana es INDEPENDIENTE</p>
+        <p>Puedes tener múltiples ventanas como esta</p>
+        <p>Cada ventana tiene su propio HTML, CSS y JS</p>
+        <button onclick="window.close()">❌ Cerrar</button>
+    </div>
+</body>
+</html>
+
+modal.html 
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ventana Modal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 30px;
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .modal-box {
+            background: white;
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .important {
+            background: #ff9800;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="modal-box">
+        <h3>⚠️ Ventana Modal</h3>
+        <div class="important">
+            <p>¡IMPORTANTE!</p>
+            <p>Esta ventana es MODAL</p>
+        </div>
+        <p>🔒 No puedes interactuar con la ventana principal</p>
+        <p>🔒 Hasta que cierres esta ventana</p>
+        <p>📌 Siempre está encima de la ventana padre</p>
+        <button onclick="window.close()" style="background:#ff9800; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">
+            ✅ Entendido, cerrar
+        </button>
+    </div>
+</body>
+</html>-
+
+package.json
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Ventana Modal</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 30px;
+            background: #fff3e0;
+            color: #e65100;
+        }
+        .modal-box {
+            background: white;
+            border: 2px solid #ff9800;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .important {
+            background: #ff9800;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="modal-box">
+        <h3>⚠️ Ventana Modal</h3>
+        <div class="important">
+            <p>¡IMPORTANTE!</p>
+            <p>Esta ventana es MODAL</p>
+        </div>
+        <p>🔒 No puedes interactuar con la ventana principal</p>
+        <p>🔒 Hasta que cierres esta ventana</p>
+        <p>📌 Siempre está encima de la ventana padre</p>
+        <button onclick="window.close()" style="background:#ff9800; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer;">
+            ✅ Entendido, cerrar
+        </button>
+    </div>
+</body>
+</html>
+
+1. USUARIO EJECUTA: npm start
+   ↓
+2. ELECTRON LEE: package.json (encuentra main.js)
+   ↓
+3. ELECTRON EJECUTA: main.js
+   ↓
+4. MAIN.JS: app.whenReady() → createMainWindow()
+   ↓
+5. MAIN.JS: mainWindow.loadFile('index.html')
+   ↓
+6. INDEX.HTML SE CARGA Y USA: preload.js
+   ↓
+7. PRELOAD.JS EXPONE: window.electronAPI
+   ↓
+8. USUARIO HACE CLIC: Botón "Crear Nueva Ventana"
+   ↓
+9. INDEX.HTML: window.electronAPI.createWindow()
+   ↓
+10. PRELOAD.JS: ipcRenderer.send('create-window')
+    ↓
+11. MAIN.JS: ipcMain.on('create-window') → createNewWindow()
+    ↓
+12. MAIN.JS: newWindow.loadFile('secondary.html')
+    ↓
+13. ¡VENTANA SECUNDARIA CREADA!
+
+Archivo	        Responsabilidad	              Dónde se ejecuta
+main.js	Crea    ventanas, controla la app	    Proceso principal (Node.js)
+preload.js	    Puente seguro backend   ↔     frontend	Ambos procesos
+index.html	    Interfaz principal	          Proceso renderizador (navegador)
+secondary.html	Interfaz secundaria	          Proceso renderizador
+modal.html	    Interfaz modal	              Proceso renderizador
+package.json	  Configuración del proyecto	  Sistema de archivos
